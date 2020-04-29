@@ -4,7 +4,7 @@ import lombok.*;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
-import java.util.Date;
+import java.time.LocalDate;
 
 @EqualsAndHashCode(callSuper = true)
 @Data
@@ -17,8 +17,8 @@ public class Session extends JournalLine {
     private String name;
 
     @Column
-    private Date date;
+    private LocalDate date;
 
     @Column
-    private Integer percent;
+    private Double percent;
 }

@@ -14,4 +14,5 @@ public interface SessionRepository extends CrudRepository<Session, Long>,
         PagingAndSortingRepository<Session, Long>,
         JpaRepository<Session, Long> {
     List<Session> findByNameContainingIgnoreCase(String search, Pageable pageable);
+    Session findByName(String name);
 }

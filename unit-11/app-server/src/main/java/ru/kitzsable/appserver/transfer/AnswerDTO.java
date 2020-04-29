@@ -15,6 +15,6 @@ public class AnswerDTO {
     public AnswerDTO(Answer answer) {
         id = answer.getId().toString();
         answerText = answer.getAnswerText();
-        isCorrect = null;
+        isCorrect = answer.getIsCorrect();
     }
 }

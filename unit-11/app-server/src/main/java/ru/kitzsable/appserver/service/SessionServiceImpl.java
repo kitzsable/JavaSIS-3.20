@@ -13,6 +13,8 @@ import ru.kitzsable.appserver.transfer.SessionCreateDTO;
 import ru.kitzsable.appserver.transfer.SessionQuestionAnswerDTO;
 
 import javax.transaction.Transactional;
+import java.text.DecimalFormat;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -52,23 +54,22 @@ public class SessionServiceImpl implements SessionService {
         // затем суммируются в общее колличество баллов,
         // а после считается процент набранных балло от возможного максимума
         // и округляется до целого значения
-        int percent = (int) Math.round(
-                createDTO.questionsList
+        double percent = createDTO.questionsList
                 .stream()
                 .map(question -> calculatePointsPerQuestion(question.answersList))
                 .reduce(0d, Double::sum)
-                / createDTO.questionsList.size() * 100);
+                / createDTO.questionsList.size() * 100;
         // Создание сессии из DTO и её сохранение в БД
         Session session = Session.builder()
                 .name(createDTO.name)
-                .date(new Date())
+                .date(LocalDate.now())
                 .percent(percent)
                 .build();
         sessionRepository.save(session);
         // Сохранение всех выбранных пользователем ответов
         saveSelectedAnswers(session, createDTO);
-        // Возвращается колличество набранных баллов за сессию
-        return String.valueOf(percent);
+        // Округление до 2х цифр после запятой
+        return new DecimalFormat("#.0#").format(percent);
     }
 
     /**
@@ -82,8 +83,8 @@ public class SessionServiceImpl implements SessionService {
         List<Question> questions = questionRepository.findAll();
         // Если количество вопросов не больше 5, то
         // возвращается список вопросов преобразованных в DTO.
-        // Иначе генерируются номера, вопросы под которыми
-        // преобразуются в DTO и сохраняются в виде списка.
+        // Иначе генерируются номера,
+        // вопросы под которыми преобразуются в DTO.
         if (questions.size() <= COUNT_OF_QUESTIONS_IN_SESSION) {
             result = questions.stream()
                     .map(question ->
@@ -98,6 +99,12 @@ public class SessionServiceImpl implements SessionService {
                                     answerRepository.findAllByQuestion(questions.get(index))))
                     .collect(Collectors.toList());
         }
+        // Скрываются ответы на вопросы
+        result.stream()
+                .flatMap(questionDTO ->
+                        questionDTO.answers.stream())
+                .forEach(answerDTO ->
+                        answerDTO.isCorrect=null);
         return result;
     }
 

@@ -10,12 +10,10 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit4.SpringRunner;
 import ru.kitzsable.appserver.model.*;
 import ru.kitzsable.appserver.repository.*;
-import ru.kitzsable.appserver.service.JournalService;
-import ru.kitzsable.appserver.service.JournalServiceImpl;
-import ru.kitzsable.appserver.service.QuestionService;
-import ru.kitzsable.appserver.service.SessionService;
+import ru.kitzsable.appserver.service.*;
 import ru.kitzsable.appserver.transfer.*;
 
+import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -152,8 +150,8 @@ public class AppServerApplicationTests {
 
 		Session session1 = Session.builder()
 				.name("Мирослав Петров")
-				.date(new Date())
-				.percent(50)
+				.date(LocalDate.now())
+				.percent(50d)
 				.build();
 		sessionRepository.save(session1);
 		SelectedAnswer selectedAnswer1_1 = SelectedAnswer.builder()
@@ -168,8 +166,8 @@ public class AppServerApplicationTests {
 
 		Session session2 = Session.builder()
 				.name("Евгений Мирошников")
-				.date(new Date())
-				.percent(63)
+				.date(LocalDate.now())
+				.percent(63d)
 				.build();
 		sessionRepository.save(session2);
 		SelectedAnswer selectedAnswer2_1 = SelectedAnswer.builder()
@@ -209,7 +207,7 @@ public class AppServerApplicationTests {
 				.defaultPageSize(5L)
 				.build();
 		journalService.save(journal);
-		assertEquals(journalService.getJournal("testJournal"), new JournalResponseDTO(journal));
+		assertEquals(journalService.getJournal(journal.getId()).id, journal.getId());
 	}
 
 	@Test
@@ -291,9 +289,9 @@ public class AppServerApplicationTests {
 
 		questionService.update(questionDTO);
 
-		assertTrue(Collections.disjoint(answerRepository.findAll(), oldAnswers));
-		assertFalse(questionRepository.findAll().contains(oldQuestion));
-		assertTrue(answerRepository.findAll()
+		Question question = questionRepository.findById(Long.parseLong(questionDTO.id))
+				.orElseThrow(() -> new RuntimeException("Не найден вопрос с id: " + questionDTO.id));
+		assertTrue(answerRepository.findAllByQuestion(question)
 				.stream()
 				.map(Answer::getAnswerText)
 				.collect(Collectors.toList())
@@ -435,7 +433,8 @@ public class AppServerApplicationTests {
 				.collect(Collectors.toList())
 				.contains(request.name));
 
-		assertTrue(selectedAnswerRepository.findAllBySession_Name(request.name)
+		assertTrue(selectedAnswerRepository.findAllBySession(
+				sessionRepository.findByName(request.name))
 				.stream()
 				.map(selectedAnswer ->
 						String.valueOf(selectedAnswer.getAnswer()
@@ -451,25 +450,36 @@ public class AppServerApplicationTests {
 		request.questionsList = new ArrayList<>();
 
 		List<Question> questions = questionRepository.findAll();
+		// Для каждого найденного вопроса в БД
 		questions.forEach(question -> {
-
+			// Создаётся DTO вопроса, на который были даны ответы
 			AnsweredQuestionDTO answeredQuestion = new AnsweredQuestionDTO();
 			answeredQuestion.id = String.valueOf(question.getId());
 			answeredQuestion.answersList = new ArrayList<>();
 
-			final boolean[] isFirst = {true};
-
+			// Для каждого ответа на текущий вопрос в БД
+			// создаётся DTO ответов данных на вопрос.
+			// Все они помечаются не выбранными
 			answerRepository.findAllByQuestion(question).forEach(answer -> {
 				SessionQuestionAnswerDTO questionAnswer = new SessionQuestionAnswerDTO();
 				questionAnswer.id = String.valueOf(answer.getId());
-				questionAnswer.isSelected = isFirst[0];
-				isFirst[0] =false;
+				questionAnswer.isSelected = false;
 				answeredQuestion.answersList.add(questionAnswer);
 			});
+			// Первый ответ на вопрос помечается выбранным
+			answeredQuestion.answersList.get(0).isSelected = true;
 			request.questionsList.add(answeredQuestion);
 		});
 
-		assertEquals("72", sessionService.createSession(request));
+		// Расчет значения для всех вопросов.
+		// В них были выбраны только первые ответы
+		assertEquals("72,22", sessionService.createSession(request));
+		// Оставляем только первые три вопроса
+		request.questionsList = request.questionsList.subList(0,3);
+		assertEquals("44,44", sessionService.createSession(request));
+		// Выбираются и все вторые ответы
+		request.questionsList.forEach(question ->
+				question.answersList.get(1).isSelected=true);
+		assertEquals("38,89", sessionService.createSession(request));
 	}
-
 }

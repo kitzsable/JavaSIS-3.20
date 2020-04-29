@@ -57,7 +57,7 @@ public class JournalServiceImpl implements JournalService{
     public JournalResponseDTO getJournal(String id) {
         return new JournalResponseDTO(journalRepository.findById(id)
                 .orElseThrow(() ->
-                        new RuntimeException("Попытка получить журнал из БД с несуществующим id: " + id)));
+                        new RuntimeException("Не удалось найти журнал " + id)));
     }
 
     /**
@@ -68,7 +68,6 @@ public class JournalServiceImpl implements JournalService{
      */
     @Override
     public JournalLineResponseDTO getJournalLineResponse(String id, JournalLineRequestDTO request) {
-        // Ответ со строками журнала и массив строк журнала
         JournalLineResponseDTO response;
         List<? extends JournalLineDTO> lines;
         // Получение строк нужного журнала, в зависимости от идентификатора,
@@ -80,24 +79,33 @@ public class JournalServiceImpl implements JournalService{
                         question ->
                                 new QuestionDTO(question,
                                         answerRepository.findAllByQuestion(question)),
-                        request.filters.isEmpty() || request.filters.get(0).value==null ?
-                                questionDTO -> true :
-                                questionDTO ->
-                                        questionDTO.answers.size() ==
-                                                Double.parseDouble(request.filters.get(0).value));
-                response = new JournalLineResponseDTO( (int)questionRepository.count(), lines);
+                        makeQuestionFilter(request.filters));
+                response = new JournalLineResponseDTO(questionRepository.count(), lines);
                 break;
             case SESSIONS_JOURNAL_ID:
                 lines = getJournalLines(request,
                             sessionRepository::findByNameContainingIgnoreCase,
                             SessionDTO::new,
                             sessionDTO -> true);
-                response = new JournalLineResponseDTO( (int)sessionRepository.count(), lines);
+                response = new JournalLineResponseDTO(sessionRepository.count(), lines);
                 break;
             default:
                 throw new RuntimeException("В url содержится неизвестный id журнала: " + id);
         }
         return response;
+    }
+
+    /**
+     * Метод создания условия для фильтрации вопросов по количеству
+     * @param filtersDTO Список фильтров
+     * @return Условие фильтрации
+     */
+    private Predicate<QuestionDTO> makeQuestionFilter(List<JournalFilterDTO> filtersDTO) {
+        return filtersDTO.isEmpty() || filtersDTO.get(0).value==null ?
+                questionDTO -> true :
+                questionDTO ->
+                        questionDTO.answers.size() ==
+                                Double.parseDouble(filtersDTO.get(0).value);
     }
 
     /**
@@ -119,10 +127,6 @@ public class JournalServiceImpl implements JournalService{
         // с прямой сортировкой по полю "name"
         PageRequest pageRequest = PageRequest.of(request.page-1, request.pageSize,
                 Sort.Direction.ASC, "name");
-        // Генерируется список элементов журнала из БД,
-        // элементы преобразуются к соответствующим DTO,
-        // проводится фильтрация по заданному предикату,
-        // возвращается получившийся список из DTO строк журнала
         return generator.apply(request.search, pageRequest)
                 .stream()
                 .map(mapper)
